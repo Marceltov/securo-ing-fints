@@ -138,12 +138,6 @@ def test_missing_balance_fails():
         s.booked_balance(ACCOUNT)
 
 
-def test_tls_uses_the_system_trust_store():
-    with session() as s:
-        adapter = s._client.connection.session.mounted["https://"]
-    assert isinstance(adapter, client_module.TrustStoreAdapter)
-
-
 def test_no_write_operations():
     source = Path(client_module.__file__).read_text().lower()
     for word in ("transfer", "send_tan", "hkccs", "hkccm", "hkdse", "hkdme", "simple_sepa"):

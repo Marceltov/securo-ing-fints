@@ -8,36 +8,21 @@ carry IBANs, names and amounts, so none of their text is passed on, and the orig
 from __future__ import annotations
 
 import datetime as dt
-import ssl
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from decimal import Decimal
 from typing import Any
 
-import truststore
 from fints.client import FinTS3PinTanClient, NeedRetryResponse, NeedTANResponse
 from fints.exceptions import FinTSClientPINError, FinTSClientTemporaryAuthError, FinTSConnectionError, FinTSSCARequiredError
 from fints.segments.depot import HKWPD5, HKWPD6
 from fints.segments.statement import HKKAZ5, HKKAZ6, HKKAZ7
 from fints.utils import mt940_to_array
-from requests.adapters import HTTPAdapter
 
 from ing_fints.errors import BankSyncError, NeedsAuth, RateLimited
 
 ING_BANK_CODE = "50010517"
 ING_SERVER = "https://fints.ing.de/fints/"
-
-
-class TrustStoreAdapter(HTTPAdapter):
-    """Verifies TLS against the operating system's trust store, for the direct and the proxied connection."""
-
-    def init_poolmanager(self, *args: Any, **kwargs: Any) -> None:
-        kwargs["ssl_context"] = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        super().init_poolmanager(*args, **kwargs)
-
-    def proxy_manager_for(self, *args: Any, **kwargs: Any) -> Any:
-        kwargs["ssl_context"] = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        return super().proxy_manager_for(*args, **kwargs)
 
 
 class _Client(FinTS3PinTanClient):
@@ -136,7 +121,6 @@ class IngSession:
     def __enter__(self) -> IngSession:
         with _translated():
             self._client = self._factory(**self._kwargs)
-            self._mount_tls()
             self._client.__enter__()
             _checked(self._client.init_tan_response)
         return self
@@ -144,9 +128,6 @@ class IngSession:
     def __exit__(self, *exc: object) -> None:
         with _translated():
             self._client.__exit__(*exc)
-
-    def _mount_tls(self) -> None:
-        self._client.connection.session.mount("https://", TrustStoreAdapter())
 
     def _call[T](self, read: Callable[[], T]) -> T:
         with _translated():

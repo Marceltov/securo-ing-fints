@@ -25,7 +25,7 @@ Design points:
 * Transaction IDs are HMACs over raw bank fields with a per-connection salt, so cleaning text never changes an ID and no IBAN appears in one.
 * Each depot is read on its own: an empty depot yields no positions for itself and leaves the others alone. Only depots in the IBAN selection are read.
 * python-fints 5.0.1 is pinned, because keeping booked and pending entries apart and reading the raw MT535 need its internals; all such uses are in one subclass in `client.py`.
-* TLS is verified against the operating system's trust store (`truststore`), as the engineering conventions ask.
+* TLS is verified by `requests` against its bundled certificates (certifi), not the operating system's trust store as the engineering conventions' HTTPS page asks: the plugin only runs in Securo's Linux runner, where that page's reason (one trust store for every platform, a company CA on a laptop) doesn't apply, and `truststore` would add a dependency and the risk of a runner image without a system store.
 
 ### Consequences
 
