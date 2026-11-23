@@ -191,7 +191,9 @@ pygments==2.21.0 \
 requests==2.34.2 \
     --hash=sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0 \
     --hash=sha256:f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed
-    # via fints
+    # via
+    #   fints
+    #   securo-ing-fints
 sepaxml==2.7.0 \
     --hash=sha256:6644f695c66c2bf8f49065d4d7b0814da42140d03292131ec08e09798ad07b5d \
     --hash=sha256:77c6ea8c4ea59e53dcabed1d5d8bb79559a0aac47cf25c8e78b06ff5fef6c2bd
