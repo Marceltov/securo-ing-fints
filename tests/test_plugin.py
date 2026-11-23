@@ -18,10 +18,10 @@ from ing_fints.plugin import _sync
 TODAY = dt.date(2026, 11, 23)
 GIRO, EXTRA, DEPOT, OTHER_DEPOT = "DE12500105170648489890", "DE34500105170000123456", "DE56500105170000777777", "DE78500105170000888888"
 PRODUCTS = {
-    GIRO: {"product_name": "Girokonto", "currency": "EUR"},
-    EXTRA: {"product_name": "Extra-Konto", "currency": "EUR"},
-    DEPOT: {"product_name": "Direkt-Depot", "currency": "EUR"},
-    OTHER_DEPOT: {"product_name": "Direkt-Depot", "currency": "EUR"},
+    GIRO: {"product_name": "Girokonto", "currency": "EUR", "depot": False},
+    EXTRA: {"product_name": "Extra-Konto", "currency": "EUR", "depot": False},
+    DEPOT: {"product_name": "Direkt-Depot", "currency": "EUR", "depot": True},
+    OTHER_DEPOT: {"product_name": "Direkt-Depot", "currency": "EUR", "depot": True},
 }
 POSITION = """:16R:GENL
 :16S:GENL

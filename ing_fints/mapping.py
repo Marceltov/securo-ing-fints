@@ -14,9 +14,7 @@ from collections import Counter
 from decimal import Decimal
 from typing import Literal
 
-from ing_fints.text import Cleaned, clean
-
-__all__ = ["Cleaned", "account_kind", "account_row", "digest", "transaction_rows"]
+from ing_fints.text import clean
 
 AccountKind = Literal["checking", "savings", "investment"]
 
@@ -41,6 +39,11 @@ PENDING_ID_FIELDS = ("date", "amount", "currency", "transaction_code", "applican
 def digest(salt: str, prefix: str, *values: object) -> str:
     content = "\x1f".join(str(v) for v in values).encode()
     return prefix + hmac.new(bytes.fromhex(salt), content, hashlib.sha256).hexdigest()[:40]
+
+
+def account_name(product_name: str, iban: str) -> str:
+    """How an account or depot is named in Securo: ING's product name and the IBAN's last four digits."""
+    return f"{product_name} …{iban[-4:]}"
 
 
 def account_kind(product_name: str) -> AccountKind:
@@ -92,7 +95,7 @@ def account_row(iban: str, product_name: str, currency: str, balance: Decimal, s
     return {
         "external_id": account_id,
         "stable_external_id": account_id,
-        "name": f"{product_name} …{iban[-4:]}",
+        "name": account_name(product_name, iban),
         "type": account_kind(product_name),
         "balance": format(balance, "f"),
         "currency": currency,

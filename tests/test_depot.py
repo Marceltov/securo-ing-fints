@@ -113,3 +113,10 @@ def test_holding_row():
         "account_external_id": digest(SALT, "ing-", DEPOT),
         "account_name": "Direkt-Depot …9890",
     }
+
+
+def test_bond_with_nominal_amount_and_percentage_price():
+    bond = POSITION.replace(":90B::MRKT//ACTU/EUR140,25", ":90A::MRKT//PRCT/98,5").replace("AGGR//UNIT/10,5", "AGGR//FAMT/1000,")
+    bond = bond.replace("HOLD//EUR1472,63", "HOLD//EUR985,").replace(":70E::HOLD//1STK\n120,123456+EUR\n", "")
+    (position,) = parse_mt535(statement(bond))
+    assert (position.quantity, position.price, position.value) == (Decimal("1000"), Decimal("0.985"), Decimal("985"))

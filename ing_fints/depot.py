@@ -12,13 +12,15 @@ from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 
 from ing_fints.errors import BankSyncError
-from ing_fints.mapping import digest
+from ing_fints.mapping import account_name, digest
 
 CENT = Decimal("0.01")
 
 _ISIN = re.compile(r"^:35B:ISIN ([A-Z]{2}[A-Z0-9]{9}\d)$")
-_PRICE = re.compile(r"^:90B::MRKT//ACTU/([A-Z]{3})(\d+,\d*)$")
-_UNITS = re.compile(r"^:93B::AGGR//UNIT/(N?)(\d+,\d*)$")
+# A price per unit (ACTU, in a currency) or, for a bond, a percentage of its nominal amount (PRCT).
+_PRICE = re.compile(r"^:90[AB]::MRKT//(?:ACTU/[A-Z]{3}|(PRCT)/)(\d+,\d*)$")
+# Units (UNIT) or, for a bond, the nominal amount (FAMT).
+_UNITS = re.compile(r"^:93B::AGGR//(?:UNIT|FAMT)/(N?)(\d+,\d*)$")
 _VALUE = re.compile(r"^:19A::HOLD//(N?)([A-Z]{3})(\d+,\d*)$")
 _BUY_IN_TAG = ":70E::HOLD//"
 _BUY_IN = re.compile(r"^(\d+,\d*)\+([A-Z]{3})")
@@ -76,7 +78,7 @@ def _position(section: list[str]) -> Position:
         if match := _ISIN.match(line):
             isin, name = match[1], _name(section, index)
         elif match := _PRICE.match(line):
-            price = _number(match[2])
+            price = _number(match[2]) / 100 if match[1] else _number(match[2])
         elif match := _UNITS.match(line):
             if match[1]:
                 raise BankSyncError("ING reported a negative depot position; holdings were not changed")
@@ -112,7 +114,7 @@ def holding_rows(positions: list[Position], depot_iban: str, product_name: str, 
             "current_value": format(p.value, "f"),
             "isin": p.isin,
             "account_external_id": account_id,
-            "account_name": f"{product_name} …{depot_iban[-4:]}",
+            "account_name": account_name(product_name, depot_iban),
         }
         if p.buy_in is not None:
             row["purchase_price"] = format((p.quantity * p.buy_in).quantize(CENT, rounding=ROUND_HALF_UP), "f")

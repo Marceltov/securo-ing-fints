@@ -6,6 +6,7 @@ from unittest import mock
 
 from ing_fints import mapping
 from ing_fints.mapping import account_kind, account_row, digest, transaction_rows
+from ing_fints.text import Cleaned
 
 SALT = "11" * 32
 TODAY = dt.date(2026, 11, 23)
@@ -36,7 +37,7 @@ def test_digest_is_salted_and_prefixed():
 
 def test_ids_ignore_cleaned_text():
     before = [row["external_id"] for row in transaction_rows([entry()], [], SALT, "acc", TODAY)]
-    with mock.patch.object(mapping, "clean", return_value=mapping.Cleaned("someone else", "something else")):
+    with mock.patch.object(mapping, "clean", return_value=Cleaned("someone else", "something else")):
         after = [row["external_id"] for row in transaction_rows([entry()], [], SALT, "acc", TODAY)]
     assert before == after
 
