@@ -84,6 +84,10 @@ uv run ruff check && uv run ruff format --check
 
 `requirements.txt` is what Securo's runner installs; after a change to `uv.lock`, regenerate it with `uv export --frozen --no-dev --no-emit-project --no-header --format requirements-txt > requirements.txt`. Decisions are in [`docs/adr/`](docs/adr/).
 
+## Other Securo plugins
+
+- [Trade Republic](https://github.com/marceltov/securo-trade-republic): the cash account, depot positions and every trade of each position, from the Trade Republic app's own login (no FinTS registration).
+
 ## License
 
 [MIT](LICENSE). The `fints` library it uses is LGPL-3.0-or-later.
