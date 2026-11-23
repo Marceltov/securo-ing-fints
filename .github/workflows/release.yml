@@ -41,5 +41,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # The checkout is shallow and has the tag as a plain ref; fetch the annotated tag for its headline.
+          git fetch --force --depth=1 origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
           headline=$(git tag -l --format='%(contents:subject)' "$GITHUB_REF_NAME")
           gh release create "$GITHUB_REF_NAME" securo-ing-fints-*.tar.gz securo-ing-fints-*.cdx.json --title "$headline" --generate-notes
