@@ -23,5 +23,5 @@ securo-ing-fints: a read-only Securo plugin that syncs ING Germany (Girokonto wi
 - Transaction IDs come from raw bank fields only, never from cleaned text: changing `text.py` must not change an ID.
 - An answer that can't be read fails the sync; it never returns an empty list in place of data it couldn't read (`holdings: None` means not read).
 - Dependabot auto-merges patch and minor bumps of dev tools and GitHub Actions once CI passes: the one case where a merge happens without the user saying so. Runtime dependencies change by hand.
-- Code, errors and docs in English; the manifest's user-facing texts in English and German.
+- Code, errors and docs in English. The manifest's user-facing texts are in English and German: Securo shows a plugin's text in the user's language (falling back to English), and this plugin's users bank in Germany. Other languages only when someone asks for one.
 - Architectural decisions go to `docs/adr/NNNN-*.md` (MADR).
