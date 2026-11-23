@@ -13,7 +13,7 @@ securo-ing-fints: a read-only Securo plugin that syncs ING Germany (Girokonto wi
 ## Architecture
 - `ing_fints/plugin.py`: `plugin.sync(params, context)`, Securo's entrypoint (`ing_fints.plugin:plugin`); reads the settings and orchestrates, nothing else.
 - `ing_fints/client.py`: the only module that talks FinTS (python-fints), read calls only. Every use of python-fints internals is in its one subclass; that is why `fints` is pinned.
-- `ing_fints/mapping.py` (accounts, transactions, IDs), `ing_fints/text.py` (payee and description clean-up), `ing_fints/depot.py` (MT535 parser, holdings): pure functions.
+- `ing_fints/mapping.py` (accounts, transactions, IDs), `ing_fints/text.py` (payee and description clean-up), `ing_fints/depot.py` (MT535 parser, holdings), `ing_fints/pending.py` (a pending entry's ID carried to its booked form, through the connection's state): pure functions.
 - `ing_fints/errors.py`: `NeedsAuth`, `RateLimited`, `BankSyncError`.
 
 ## Rules

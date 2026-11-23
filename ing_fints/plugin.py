@@ -21,6 +21,7 @@ from ing_fints.client import IngSession
 from ing_fints.depot import holding_rows, parse_mt535
 from ing_fints.errors import BankSyncError, NeedsAuth
 from ing_fints.mapping import account_row, digest, transaction_rows
+from ing_fints.pending import carry
 
 CONTRACT = 1
 BERLIN = ZoneInfo("Europe/Berlin")
@@ -139,12 +140,20 @@ def _selected(bank: IngSession, ibans: frozenset[str]) -> list[tuple[str, Any]]:
     return [(iban, account) for iban, account in listed if not ibans or iban in ibans]
 
 
-def _cash_account(bank: IngSession, iban: str, account: Any, product: dict, settings: Settings, start: dt.date, today: dt.date) -> dict:
-    booked, pending = bank.transactions(account, start, today)
-    # The balance the ING app shows: booked, plus what is pending (equal to ING's own pending balance, ADR 0002).
-    balance = bank.booked_balance(account) + sum((entry["amount"] for entry in pending), Decimal(0))
-    rows = transaction_rows(booked, pending, settings.salt, digest(settings.salt, "ing-", iban), today)
-    return account_row(iban, product["product_name"], product["currency"], balance, settings.salt, rows)
+def _signed(row: dict) -> Decimal:
+    return Decimal(row["amount"]) if row["type"] == "credit" else -Decimal(row["amount"])
+
+
+def _cash_account(
+    bank: IngSession, iban: str, account: Any, product: dict, settings: Settings, start: dt.date, today: dt.date, remembered: object
+) -> tuple[dict, dict]:
+    """The account row, and what to remember about its pending entries for the next sync."""
+    account_id = digest(settings.salt, "ing-", iban)
+    rows = transaction_rows(*bank.transactions(account, start, today), settings.salt, account_id, today)
+    booked, pending, state = carry([r for r in rows if r["status"] == "posted"], [r for r in rows if r["status"] == "pending"], remembered, today)
+    # The balance the ING app shows: booked, plus what is still pending (equal to ING's own pending balance, ADR 0002).
+    balance = bank.booked_balance(account) + sum((_signed(row) for row in pending), Decimal(0))
+    return account_row(iban, product["product_name"], product["currency"], balance, settings.salt, booked + pending), state
 
 
 def _depot_holdings(bank: IngSession, depots: list[tuple[str, Any, dict]], salt: str) -> list[dict]:
@@ -164,12 +173,19 @@ def _sync(params: Mapping[str, Any], context: Any, *, session: Callable[..., Ing
         for iban, account in _selected(bank, settings.ibans):
             product = products.get(iban) or {"product_name": "ING account", "currency": "EUR", "depot": False}
             (depots if product["depot"] else cash).append((iban, account, product))
-        accounts = [_cash_account(bank, iban, account, product, settings, start, today) for iban, account, product in cash]
+        previous = params.get("state") if isinstance(params.get("state"), dict) else {}
+        remembered = previous.get("accounts") if isinstance(previous.get("accounts"), dict) else {}
+        accounts, pending_state = [], {}
+        for iban, account, product in cash:
+            row, pending_state[digest(settings.salt, "ing-", iban)] = _cash_account(
+                bank, iban, account, product, settings, start, today, remembered.get(digest(settings.salt, "ing-", iban))
+            )
+            accounts.append(row)
         # None means "not read": Securo then keeps the holdings it has. A depot read and found empty gives [].
         holdings = _depot_holdings(bank, depots, settings.salt) if settings.holdings and depots else None
         state = bank.state()
     return {
-        "state": {"last_sync_day": today.isoformat()},
+        "state": {"last_sync_day": today.isoformat(), "accounts": pending_state},
         "secrets": {
             "id_salt": settings.salt,
             "fints_identity": _identity(settings.salt, settings.login, settings.product_id),

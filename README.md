@@ -31,7 +31,7 @@ Every program that uses FinTS must be registered with the Deutsche Kreditwirtsch
 1. In Securo, open **Plugins → Catalog**, find **ING Germany (FinTS)**, review the network access it asks for, and install it.
 2. Create a connection with your login, PIN and product registration number.
 3. Optionally enter the IBANs to sync, separated by commas; empty means every account ING lists. Depots are read only if they are in that list (or the list is empty).
-4. Turn on **Import pending transactions** in the connection's settings to see pending entries (see below).
+4. Leave **Import pending transactions** on (Securo's default) to see pending entries, if your Securo vouches for this plugin's complete feed (see below); otherwise turn it off.
 5. Run the first sync and compare balances, a few entries and the depot positions with the ING app.
 
 ### Settings
@@ -44,26 +44,37 @@ Every program that uses FinTS must be registered with the Deutsche Kreditwirtsch
 
 ## Pending entries
 
-A pending entry is imported under its own ID. Once ING books it, ING stops listing it as pending, and the booked entry arrives as a new one. Securo removes the pending one when the plugin's feed is **complete**, which this plugin's is: every sync returns all booked entries of the window and all current pending ones.
+```mermaid
+flowchart LR
+  P["ING lists a card payment<br/>as pending"] --> S1["sync: a pending row<br/>(its own ID)"]
+  S1 --> B["ING books it"]
+  B --> M{"one pending entry with<br/>the same amount and merchant?"}
+  M -- yes --> K["the booked entry takes the pending ID:<br/>Securo turns that row into booked"]
+  M -- "no, or ambiguous" --> E["the booked entry is new; Securo removes<br/>the pending row once it is a week old"]
+```
 
-That needs a Securo whose sync expires pending rows of a plugin with a complete feed. Until a Securo release reads that from the plugin's manifest, the operator vouches for the plugin with `PLUGINS_COMPLETE_FEED=marceltov/securo-ing-fints`. Without it, turn **Import pending transactions** off: a booked entry would otherwise appear next to its pending form.
+A pending entry is imported under its own ID. When ING books it, its booked form carries a different date and text and no reference to the pending one. The plugin remembers each sync's pending entries; when a booked entry has the same amount and merchant as exactly one pending entry, and was booked on or within ten days after the purchase, it gets that pending entry's ID, and Securo turns the row into a booked one in place. The row keeps the pending entry's text and date (the day of the purchase).
 
-Anything you set by hand on a pending entry (a category, a note) does not carry over to its booked form.
+When that isn't certain (two equal purchases at the same shop), the booked entry is imported as new, and Securo deletes the pending row once ING no longer lists it, which Securo does only for a row at least a week old. For those few days both show.
+
+That deletion needs a Securo that trusts the plugin's feed to be **complete** (every sync returns all booked entries of the window and all current pending ones). Until a Securo release reads that from the plugin's manifest, the operator vouches for it with `PLUGINS_COMPLETE_FEED=marceltov/securo-ing-fints`. Without it, turn **Import pending transactions** off. The balance still includes pending amounts then, as the ING app does, so it won't equal the sum of the listed entries.
 
 ## What it doesn't do
 
 - **No depot history.** ING offers no depot transactions over FinTS, so positions come without their trades, and a position's chart starts on the first sync.
-- **No app approval inside a sync.** If ING asks for an approval in its app, the connection pauses ("needs attention") until you reconnect it.
-- **No Rahmenkredit, no loans:** ING doesn't offer them over FinTS.
+- **No app approval inside a sync.** If ING asks for an approval in its app (or a strong customer authentication, code 9075), the connection pauses ("needs attention"). Log in to ING's online banking once, then sync again.
+- **No loans, no Rahmenkredit:** ING doesn't list them over FinTS at all, so they can't come in through this plugin.
 
 ## Safety
 
 - **Read-only by construction**: the only calls are the account list, bank information, balances, statements and depot statements (`ing_fints/client.py`).
-- **Fails closed**: an answer the plugin can't read fails the sync; a depot it couldn't read is reported as "not read", never as empty, so Securo keeps what it has.
-- **Nothing of yours in messages**: error messages are fixed texts; they never carry IBANs, names, amounts or bank answers. Login, PIN, registration number and IBAN selection are Securo plugin secrets.
+- **Fails closed**: an answer the plugin can't read fails the whole sync, and Securo keeps what it has. A depot position in a shape the plugin doesn't know fails it too; set **Read depot positions** to `no` to sync the accounts meanwhile, and report the shape (not the data) in an issue.
+- **Nothing of yours in messages or logs**: error messages are fixed texts with at most FinTS's four-digit response codes; they never carry IBANs, names, amounts or bank answers, and python-fints' own logging (which writes bank answers) is switched off. Login, PIN, registration number and IBAN selection are Securo plugin secrets.
 - IDs are salted hashes per connection: no IBAN appears in an account or transaction ID. Don't delete and recreate a connection without need: a new one gets new IDs.
 
 ## Development
+
+Securo's plugin runner runs Python 3.14, and so does this code.
 
 ```sh
 uv sync

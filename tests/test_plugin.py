@@ -195,3 +195,21 @@ def test_reply_passes_securo_contract(tmp_path):
     # Securo's settings want a secret key to import; this one only satisfies the import.
     env = os.environ | {"SECRET_KEY": "test-only-not-a-secret"}
     subprocess.run([str(BACKEND / ".venv/bin/python"), "-c", check, str(payload)], cwd=BACKEND, env=env, check=True, capture_output=True, timeout=60)
+
+
+def test_a_booked_card_payment_keeps_its_pending_id_across_syncs():
+    first = sync()
+    giro = accounts_by_name(first)["Girokonto …9890"]
+    pending_id = next(t["external_id"] for t in giro["transactions"] if t["status"] == "pending" and t["amount"] == "20.00")
+
+    class Booked(FakeSession):
+        def transactions(self, account, start, end):
+            if account.iban == GIRO:
+                return [entry("-30.00"), entry("-20.00", day=dt.date(2026, 11, 22))], [entry("-5.50")]
+            return super().transactions(account, start, end)
+
+    FakeSession.instances = []
+    second = _sync({"state": first["state"]}, context(**first["secrets"]), session=Booked, today=TODAY)
+    giro = accounts_by_name(second)["Girokonto …9890"]
+    assert [(t["external_id"] == pending_id, t["status"]) for t in giro["transactions"] if t["amount"] == "20.00"] == [(True, "posted")]
+    assert giro["balance"] == "94.50"  # the fake keeps its booked 100.00; only -5.50 is still pending
