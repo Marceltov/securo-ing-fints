@@ -1,0 +1,27 @@
+[project]
+name = "securo-ing-fints"
+version = "1.0.0"
+description = "Read-only ING Germany FinTS plugin for Securo"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.14"
+dependencies = [
+    "fints==5.0.1",
+    "truststore>=0.10.5",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ing_fints"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
