@@ -30,9 +30,9 @@ Chosen option: **pending entries under their own IDs, a complete feed, and the I
 ### Consequences
 
 - Good, because Securo shows the balance and the entries the ING app shows, without guessing which booking settles which pending entry.
-- Bad, because it needs a Securo that expires pending rows of plugin feeds, and an operator who vouches for this plugin (`PLUGINS_COMPLETE_FEED`) until a Securo release reads `complete_feed` from the manifest.
+- Bad, because it needs a Securo that expires pending rows of plugin feeds, and an operator who vouches for this plugin (`PLUGINS_COMPLETE_FEED`) until a Securo release reads `complete_feed` from the manifest. _Amended 2026-11-24:_ `PLUGINS_COMPLETE_FEED` exists only in a fork of Securo; released Securo (0.21.0) takes neither it nor the manifest field. [securo#1728](https://github.com/securo-finance/securo/pull/1728), merged 2026-11-23, adds the manifest field; until a release has it, users of released Securo keep pending import off.
 - Good, because in the usual case (one purchase per shop and amount) the row simply turns booked, with what was set on it by hand.
 - Bad, because a carried row keeps the pending entry's text and date: Securo refreshes those on a known ID only from a provider's raw data, which a plugin doesn't send.
-- Bad, because an unmatched booking shows next to its pending form until that row is a week old.
+- Bad, because an unmatched booking shows next to its pending form ~~until that row is a week old~~ until the next sync, since [securo#1772](https://github.com/securo-finance/securo/pull/1772) (merged 2026-11-23): a complete feed's vanished pending row no longer waits out Enable Banking's settle window.
 - Bad, because the match is by content (amount and merchant), not by a reference ING doesn't send: a wrong match is possible when a pending entry and an unrelated booking agree in both; it swaps two rows' IDs, it doesn't lose or double one.
 - Bad, because losing the connection's state (a new connection) forgets the carried IDs: booked entries then arrive under their own IDs.
