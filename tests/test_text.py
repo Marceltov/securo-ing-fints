@@ -71,7 +71,8 @@ def test_whitespace_collapsed_and_plain_text_kept():
 
 
 def test_empty_purpose_falls_back_to_posting_text_then_a_default():
-    assert clean(raw("Erika Mustermann", "", "Gutschrift aus Dauerauftrag")).description == "Gutschrift aus Dauerauftrag"
+    assert clean(raw("Erika Mustermann", "", "Gutschrift aus Dauerauftrag")).description == "Gutschrift aus Dauerauftrag · Erika Mustermann"
+    assert clean(raw("", "", "Abschluss")).description == "Abschluss"
     assert clean({"applicant_name": None, "purpose": None, "posting_text": None}) == Cleaned(None, "ING")
 
 
@@ -84,3 +85,89 @@ def test_lengths_fit_securo():
 def test_card_refund():
     row = raw("VISA BAUMARKT MUSTER AG F", "NR XXXX 1234 MUSTERSTADT DEGUTSCHRIFTSBELEG03.11 12.99123456ARN12345678901234567890123", "Gutschrift")
     assert clean(row) == Cleaned("BAUMARKT MUSTER AG F", "Erstattung: BAUMARKT MUSTER AG F · Musterstadt")
+
+
+# Shapes found in a live sync on 2026-11-24 (values invented).
+
+
+def test_visa_glued_to_the_merchant():
+    row = raw("VISABAUMARKT MUSTER       ", "NR XXXX 1234 MUSTERSTADT DEKAUFUMSATZ01.11 9.99123456ARN12345678901234567890123", "Lastschrifteinzug")
+    assert clean(row) == Cleaned("BAUMARKT MUSTER", "BAUMARKT MUSTER · Musterstadt")
+
+
+def test_card_place_that_is_a_phone_number_or_code_is_left_out():
+    paypal = raw("VISA PAYPAL *MUSTERDIENST", "NR XXXX 1234 0800123456 DEKAUFUMSATZ15.10 5.00123456ARN12345678901234567890123", "Lastschrifteinzug")
+    abroad = raw("VISA PAYPAL *NEWS ONLINE", "NR XXXX 1234 0800123456 USKAUFUMSATZ15.10 8.00123456ARN22345678901234567890123", "Lastschrifteinzug")
+    code = raw("VISA STADT MUSTERSTADT", "NR XXXX 1234 XY123456789 DEKAUFUMSATZ15.10 30.00123456ARN12345678901234567890123", "Lastschrifteinzug")
+    assert clean(paypal) == Cleaned("MUSTERDIENST", "MUSTERDIENST · PayPal")
+    assert clean(abroad) == Cleaned("NEWS ONLINE", "NEWS ONLINE · US · PayPal")
+    assert clean(code) == Cleaned("STADT MUSTERSTADT", "STADT MUSTERSTADT")
+
+
+def test_card_payment_in_a_foreign_currency():
+    row = raw("VISA DESIGN TOOLS LTD", "NR XXXX 1234 SPRINGFIELD AUKURS 1.2345000KAUFUMSATZ01.09 20.00123456ARN12345678901234567890123", "Lastschrifteinzug")
+    assert clean(row) == Cleaned("DESIGN TOOLS LTD", "DESIGN TOOLS LTD · Springfield, AU")
+
+
+def test_cash_withdrawal():
+    purpose = "NR XXXX 1234 MUSTERSTADT DEBARGELDAUSZAHLUNG01.10 50.00123456ARN12345678901234567890123"
+    row = raw("Bargeldauszahlung VISA Card MUSTERBANK", purpose, "Lastschrifteinzug")
+    assert clean(row) == Cleaned("MUSTERBANK", "Bargeldauszahlung · Musterstadt")
+
+
+def test_pending_card_payment_with_the_merchant_padded_by_spaces():
+    row = raw("Musikdienst              Musterstadt", "Musikdienst MusterstadtDatum 22.11. 2026 Zeit 19.50Kaufumsatz VISA CardEUR 17,99", "Lastschrifteinzug")
+    assert clean(row) == Cleaned("Musikdienst", "Musikdienst · Musterstadt")
+
+
+def test_paypal_names_the_merchant():
+    plain = raw("PayPal Europe S.a.r.l. et Cie S.C.A", "1000000000001/PP.1444.PP/. Muster Cloud, Inc., Ihr Einkauf bei Muster Cloud,Inc.", "Lastschrifteinzug")
+    glued = raw("PayPal Europe S.a.r.l. et Cie S.C.A", "1000000000002/. Muster Cloud Inc, IhrEinkauf bei Muster Cloud Inc", "Lastschrifteinzug")
+    unnamed = raw("PayPal Europe S.a.r.l. etCie S.C.A", "1000000000003/PP.1444.PP/. , Ihr Einkauf bei", "Lastschrifteinzug")
+    refund = raw("PayPal Europe S.a.r.l. et Cie S.C.A", "PP.9491.PP/YYR1000000000004", "Gutschrift")
+    assert clean(plain) == Cleaned("Muster Cloud, Inc.", "Muster Cloud, Inc. · PayPal")
+    assert clean(glued) == Cleaned("Muster Cloud Inc", "Muster Cloud Inc · PayPal")
+    assert clean(unnamed) == Cleaned("PayPal", "PayPal")
+    assert clean(refund) == Cleaned("PayPal", "PayPal")
+
+
+def test_amazon_shows_the_order_number():
+    market = raw("AMAZON PAYMENTS EUROPE S.C.A.", "111.2223333.4445555 AMZN Mktp DE ABCDEF1234567890", "Lastschrifteinzug")
+    shop = raw("AMAZON EU S.A R.L., NIEDERLASSUNG DEUTSCHLAND", "999.8887777.6665555 Amazon.de ZYXWVU0987654321", "Lastschrifteinzug")
+    assert clean(market) == Cleaned("Amazon", "Amazon Marketplace · Bestellung 111-2223333-4445555")
+    assert clean(shop) == Cleaned("Amazon", "Amazon.de · Bestellung 999-8887777-6665555")
+
+
+def test_girocard_direct_debit():
+    row = raw("MUSTERMARKT MUSTERSTADT 0001", "ELV1234567890.10 17.40 ME0", "Lastschrifteinzug")
+    assert clean(row) == Cleaned("MUSTERMARKT MUSTERSTADT 0001", "MUSTERMARKT MUSTERSTADT 0001 · girocard")
+
+
+def test_transfer_without_purpose_names_the_counterparty():
+    out = raw("DE12500105170648489890Erika Mustermann", "", "Überweisung")
+    back = raw("Erika Mustermann", "", "Gutschrift")
+    assert clean(out) == Cleaned("Erika Mustermann", "Überweisung · Erika Mustermann")
+    assert clean(back) == Cleaned("Erika Mustermann", "Gutschrift · Erika Mustermann")
+
+
+def test_merchant_references_and_prefixes_are_cut():
+    def card(name, place="MUSTERSTADT DE"):
+        return clean(raw(name, f"NR XXXX 1234 {place}KAUFUMSATZ19.11 4.01123456ARN12345678901234567890123", "Lastschrifteinzug"))
+
+    assert card("VISA AMZN MKTP DE*AB12CD34E", "Shop.Com/Ex LU") == Cleaned("Amazon Marketplace", "Amazon Marketplace · LU")
+    assert card("VISA AMAZON* X12Y34Z56", "Luxembourg LU") == Cleaned("Amazon", "Amazon · Luxembourg, LU")
+    assert card("VISAXYZ*STADT APOTHEKE     ") == Cleaned("STADT APOTHEKE", "STADT APOTHEKE · Musterstadt")
+    assert card("VISA PAYPAL *NEWSLETTER DIENST", "0800123456 DE") == Cleaned("NEWSLETTER DIENST", "NEWSLETTER DIENST · PayPal")
+    round_up = raw("5432109876Kleingeld Plus - Sparen", "Überweisung / Aus Kauf4,01. beiAMZN MKTP DE*AB12CD34ESEQ123456789012345", "Überweisung")
+    assert clean(round_up).description == "Aufrundung: Amazon Marketplace"
+
+
+def test_amazon_return_and_paypal_glued_words():
+    returned_text = "123.4567890.1234567 AMZN Mktp DE XXVorgelegt am 05.10.2026Nicht bezahlt 9,99.Fehlende Deckung"
+    returned = raw("AMAZON PAYMENTS EUROPE S.C.A.", returned_text, "Retouren")
+    glued_text = "1000000000005/PP.1444.PP/. Muster Payments Ltd., Ihr Einkaufbei Muster Payments Ltd."
+    glued = raw("PayPal Europe S.a.r.l. et Cie S.C.A", glued_text, "Lastschrifteinzug")
+    assert clean(returned) == Cleaned(
+        "Amazon", "Amazon Marketplace · Bestellung 123-4567890-1234567, vorgelegt am 05.10.2026, nicht bezahlt 9,99, fehlende Deckung"
+    )
+    assert clean(glued) == Cleaned("Muster Payments Ltd.", "Muster Payments Ltd. · PayPal")
