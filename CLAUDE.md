@@ -18,6 +18,7 @@ securo-ing-fints: a read-only Securo plugin that syncs ING Germany (Girokonto wi
 
 ## Rules
 - Follows Marceltov/engineering-conventions; the rules here win where they differ. No docs site: the README is the documentation.
+- CodeQL runs from `.github/workflows/codeql.yml`, not GitHub's default setup, so that `.github/codeql/codeql-config.yml` can leave out the tests (their fixtures look like leaks on purpose). `tests/test_codeql_config.py` fails if a pattern there would also leave out a file of `ing_fints/`; change the two together.
 - Read-only: no code path may initiate a payment, a transfer or submit a TAN.
 - No IBAN, balance, real transaction text, registration number or bank response in git, a test fixture, an error message or a log. Fixtures are invented values in ING's shapes.
 - Transaction IDs come from raw bank fields only, never from cleaned text: changing `text.py` must not change an ID.
