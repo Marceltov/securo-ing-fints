@@ -45,11 +45,11 @@ Every program that uses FinTS must be registered with the Deutsche Kreditwirtsch
 
 ## Names and notes
 
-| Field       | What lands there                                                                                                      | Example                                                                                                      |
-| ----------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Field       | What lands there                                                                                                      | Example                                                                                                                   |
+| ----------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | Description | the name the ING app lists, without an IBAN or account number glued to it and without `VISA`                          | `BAUMARKT MUSTER`, `Kleingeld Plus - Sparen`, `PayPal Europe S.a.r.l. et Cie S.C.A`; pending: `Musikdienst · Musterstadt` |
-| Payee       | the same name, without a card terminal's order reference or a payment provider's prefix, so one merchant is one payee | `AMZN MKTP DE*AB12CD34E` → `AMZN MKTP DE`, `PAYPAL *NEWS ONLINE` → `NEWS ONLINE`                             |
-| Notes       | ING's whole purpose text, only whitespace collapsed                                                                   | the PayPal merchant, an order number, `Miete`                                                                |
+| Payee       | the same name, without a card terminal's order reference or a payment provider's prefix, so one merchant is one payee | `AMZN MKTP DE*AB12CD34E` → `AMZN MKTP DE`, `PAYPAL *NEWS ONLINE` → `NEWS ONLINE`                                          |
+| Notes       | ING's whole purpose text, only whitespace collapsed                                                                   | the PayPal merchant, an order number, `Miete`                                                                             |
 
 The description is what you read in the list; the notes hold everything else ING sends, so a search for an order number or a reference finds the entry, and Securo's rules can match on it. An entry ING lists without a name (a securities trade, the closing of a statement) is described by its own words, for example `Kauf <security> (<ISIN>)`. With **Purpose text in notes** set to `no`, the purpose follows the name in the description instead.
 
