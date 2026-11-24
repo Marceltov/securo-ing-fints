@@ -5,7 +5,7 @@ A read-only [Securo](https://github.com/securo-finance/securo) plugin (Securo 0.
 - **Girokonto** with its booked and **pending** (vorgemerkte) entries, and the balance the ING app shows: booked plus pending.
 - **Extra-Konten** with their balance and entries.
 - **Direkt-Depot positions** as holdings: ISIN, name, units, ING's current price and value, and the amount invested (units × ING's average buy-in).
-- **Readable payees and descriptions**: no IBANs or account numbers glued to names, no card references; a card payment reads as "merchant · town", a securities trade as "Kauf <security> (<ISIN>)".
+- **Entries as the ING app lists them**: the counterparty's name as the description, the full purpose text in the notes, where Securo's search and rules find it (see [Names and notes](#names-and-notes)).
 
 It talks only to `fints.ing.de`, through Securo's egress proxy. It cannot make payments or transfers: the code has no call for them.
 
@@ -36,11 +36,24 @@ Every program that uses FinTS must be registered with the Deutsche Kreditwirtsch
 
 ### Settings
 
-| Setting              | Default |                                                                                 |
-| -------------------- | ------- | ------------------------------------------------------------------------------- |
-| IBANs to sync        | all     | Complete IBANs, comma-separated. An IBAN ING doesn't list fails the sync.       |
-| Days of history      | 85      | 1 to 89. FinTS reaches back about 90 days; later syncs start where Securo asks. |
-| Read depot positions | yes     | `no` leaves the holdings Securo has untouched.                                  |
+| Setting               | Default |                                                                                                                                                                                 |
+| --------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| IBANs to sync         | all     | Complete IBANs, comma-separated. An IBAN ING doesn't list fails the sync.                                                                                                       |
+| Days of history       | 85      | 1 to 89. FinTS reaches back about 90 days; later syncs start where Securo asks.                                                                                                 |
+| Read depot positions  | yes     | `no` leaves the holdings Securo has untouched.                                                                                                                                  |
+| Purpose text in notes | no      | `yes` on a Securo that takes notes from plugins ([securo#1833](https://github.com/securo-finance/securo/pull/1833)); with `no` the purpose follows the name in the description. |
+
+## Names and notes
+
+| Field       | What lands there                                                                                                      | Example                                                                                                                   |
+| ----------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Description | the name the ING app lists, without an IBAN or account number glued to it and without `VISA`                          | `BAUMARKT MUSTER`, `Kleingeld Plus - Sparen`, `PayPal Europe S.a.r.l. et Cie S.C.A`; pending: `Musikdienst · Musterstadt` |
+| Payee       | the same name, without a card terminal's order reference or a payment provider's prefix, so one merchant is one payee | `AMZN MKTP DE*AB12CD34E` → `AMZN MKTP DE`, `PAYPAL *NEWS ONLINE` → `NEWS ONLINE`                                          |
+| Notes       | ING's whole purpose text, only whitespace collapsed                                                                   | the PayPal merchant, an order number, `Miete`                                                                             |
+
+The description is what you read in the list; the notes hold everything else ING sends, so a search for an order number or a reference finds the entry, and Securo's rules can match on it. An entry ING lists without a name (a securities trade, the closing of a statement) is described by its own words, for example `Kauf <security> (<ISIN>)`. With **Purpose text in notes** set to `no`, the purpose follows the name in the description instead.
+
+On a Securo with [securo#1834](https://github.com/securo-finance/securo/pull/1834), entries already imported take a later release's names and notes on their next sync, unless you edited them.
 
 ## Pending entries
 

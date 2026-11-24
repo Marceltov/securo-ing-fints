@@ -27,7 +27,7 @@ CONTRACT = 1
 BERLIN = ZoneInfo("Europe/Berlin")
 DEFAULT_HISTORY_DAYS = 85
 MAX_HISTORY_DAYS = 89
-YES = {"", "yes", "ja", "true", "1"}
+YES = {"yes", "ja", "true", "1"}
 NO = {"no", "nein", "false", "0"}
 
 
@@ -39,6 +39,7 @@ class Settings:
     ibans: frozenset[str]
     history_days: int
     holdings: bool
+    notes: bool
     salt: str
     saved_state: bytes | None
 
@@ -67,13 +68,15 @@ def _history_days(value: object) -> int:
     return days
 
 
-def _holdings(value: object) -> bool:
+def _yes_no(value: object, *, default: bool, what: str) -> bool:
     text = str(value or "").strip().casefold()
+    if not text:
+        return default
     if text in YES:
         return True
     if text in NO:
         return False
-    raise BankSyncError("read depot positions must be yes or no")
+    raise BankSyncError(f"{what} must be yes or no")
 
 
 def _salt(secrets: Mapping[str, Any]) -> str:
@@ -108,7 +111,8 @@ def _settings(context: Any) -> Settings:
         product_id=product_id,
         ibans=_ibans(secrets.get("account_ibans")),
         history_days=_history_days(config.get("history_days")),
-        holdings=_holdings(config.get("holdings")),
+        holdings=_yes_no(config.get("holdings"), default=True, what="read depot positions"),
+        notes=_yes_no(config.get("notes"), default=False, what="purpose text in notes"),
         salt=salt,
         saved_state=_saved_state(secrets, _identity(salt, login, product_id)),
     )
@@ -149,7 +153,7 @@ def _cash_account(
 ) -> tuple[dict, dict]:
     """The account row, and what to remember about its pending entries for the next sync."""
     account_id = digest(settings.salt, "ing-", iban)
-    rows = transaction_rows(*bank.transactions(account, start, today), settings.salt, account_id, today)
+    rows = transaction_rows(*bank.transactions(account, start, today), settings.salt, account_id, today, notes=settings.notes)
     booked, pending, state = carry([r for r in rows if r["status"] == "posted"], [r for r in rows if r["status"] == "pending"], remembered, today)
     # The balance the ING app shows: booked, plus what is still pending (equal to ING's own pending balance, ADR 0002).
     balance = bank.booked_balance(account) + sum((_signed(row) for row in pending), Decimal(0))

@@ -1,36 +1,42 @@
-"""Readable payees and descriptions from ING's MT940 text.
+"""Payee, description and notes from ING's MT940 text, the way ING's own app lists an entry.
 
-ING sends the counterparty and the purpose as fixed-width fields joined without separators: an IBAN glued to the
-front of a name, card payments as `VISA <merchant>` with the town and a card reference in the purpose, securities
-as `WP.ABRECHNUNG <number>Kauf ISIN<isin><name>`. Each shape gets one rule; the first that matches wins, and text no
-rule knows is only trimmed. The result is for display only: transaction IDs never depend on it.
+The app's list shows one name per entry: the counterparty (`HORNBACH`, `Kleingeld Plus - Sparen`,
+`PayPal Europe S.a.r.l. et Cie S.C.A`) and, for a pending card payment, the merchant and its town. Everything else
+ING sends, the purpose text, is shown only when an entry is opened. So:
+
+- the description is that name, without what ING glues in front of it (an IBAN or account number, `VISA`);
+- the payee is the same name, without what a card terminal adds to it (an order reference after `*`, a payment
+  provider's prefix), so that one merchant is one payee; for a pending card payment, the merchant alone;
+- the notes are the whole purpose text, only whitespace collapsed: Securo searches them and its rules read them.
+
+An entry without a name (a securities trade, the account statement's closing) is described by its own words. The
+result is for display only: transaction IDs never depend on it.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
 from dataclasses import dataclass
 
 PAYEE_MAX = 200
 DESCRIPTION_MAX = 500
+NOTES_MAX = 1000
 FALLBACK = "ING"
 
-# A card merchant field is 25 characters of name, then the town.
+# A pending card payment's name is the merchant, then the town: padded apart by spaces, or (when the merchant
+# fills it) a 25-character merchant column directly followed by the town.
 CARD_NAME_WIDTH = 25
 
 _SPACES = re.compile(r"\s+")
 _LEADING_ACCOUNT = re.compile(r"^(?:DE\d{20}|[A-Z]{2}\d{12,32}|\d{10})(?=\D)")
-_VISA = re.compile(r"^VISA\s+")
-_NOISE = re.compile(r"ARN\d+|NR XXXX \d{4}|SEQ\d+|Apple Pay$|Google Pay$")
-
-_CARD_BOOKED = re.compile(r"^NR XXXX \d{4} (?P<town>.+?) ?(?P<country>[A-Z]{2})(?P<kind>KAUFUMSATZ|GUTSCHRIFTSBELEG)")
+# A booked card payment's name starts with VISA, sometimes without a space before the merchant.
+_CARD = re.compile(r"^VISA\s*(?=\S)")
 _CARD_PENDING = re.compile(r"Datum \d\d\.\d\d\. ?\d{4} Zeit \d\d\.\d\d ?Kaufumsatz VISA Card")
-_GIROCARD = re.compile(r"^(?P<text>.*?)\s*\d{4}\.\d\d\.\d\dT\d\d\.\d\d\.\d\d Folgenr\.\s*\d+ Verfalld\.\s*\d{4}\.\d\d$")
-_ROUND_UP = re.compile(r"Aus Kauf\s*[\d.,]+?\.?\s*bei\s*(?P<merchant>.+?)\s*(?:SEQ\d+)?$")
-_FOREIGN_FEE = re.compile(r"AUSLANDSEINSATZENTGELT")
-_GIROCARD_FEE = re.compile(r"MONATLICHES ENTGELT\s*GIROCARD")
-_RETURN_PARTS = re.compile(r"\.?\s*(Vorgelegt am|Nicht bezahlt|Fehlende Deckung)")
+_PADDED = re.compile(r"^(?P<merchant>.*?\S)\s{2,}(?P<town>\S.*)$")
+# What a card terminal adds to a merchant: `NAME*REFERENCE` (an order code), a provider's prefix (`XYZ*NAME`),
+# PayPal's `PAYPAL *NAME`.
+_MERCHANT_REF = re.compile(r"^(?P<name>[^*]+?)\s*\*\s*[A-Z0-9]*\d[A-Z0-9]*$")
+_MERCHANT_PREFIX = re.compile(r"^(?:[A-Z]{2,4}|PAYPAL) ?\*(?P<name>\S.*)$")
 _SECURITY_TRADE = re.compile(r"WP\.ABRECHNUNG \d+\s*(?P<kind>Kauf|Verkauf) ISIN\s*(?P<isin>[A-Z]{2}[A-Z0-9]{9}\d)\s*(?P<name>.+)")
 _PAYOUT = re.compile(r"Zins/Dividende\s*ISIN\s*(?P<isin>[A-Z]{2}[A-Z0-9]{9}\d)\s*(?P<name>.+)")
 
@@ -39,95 +45,52 @@ _PAYOUT = re.compile(r"Zins/Dividende\s*ISIN\s*(?P<isin>[A-Z]{2}[A-Z0-9]{9}\d)\s
 class Cleaned:
     payee: str | None
     description: str
+    notes: str | None = None
 
 
 def _squash(value: object) -> str:
     return _SPACES.sub(" ", str(value or "")).strip()
 
 
-def _payee(name: str) -> str | None:
-    name = _VISA.sub("", _LEADING_ACCOUNT.sub("", name.strip()))
-    return _squash(name)[:PAYEE_MAX] or None
+def _name(raw_name: str) -> str:
+    """The name the app lists: without a glued IBAN or account number, and without a card payment's VISA."""
+    return _squash(_CARD.sub("", _LEADING_ACCOUNT.sub("", raw_name.strip())))
 
 
-def _joined(*parts: str | None) -> str:
-    return " · ".join(p for p in parts if p)
+def _payee(name: str) -> str:
+    """One merchant, one payee: the name without a terminal's order reference or a payment provider's prefix."""
+    if (match := _MERCHANT_REF.match(name)) or (match := _MERCHANT_PREFIX.match(name)):
+        return _squash(match["name"])
+    return name
 
 
-def _card_booked(name: str, purpose: str) -> Cleaned | None:
-    match = _CARD_BOOKED.match(purpose)
-    if not match or not _VISA.match(name):
-        return None
-    payee = _payee(name)
-    town = match["town"].title()
-    if match["country"] != "DE":
-        town = f"{town}, {match['country']}"
-    description = _joined(payee, town)
-    return Cleaned(payee, f"Erstattung: {description}" if match["kind"] == "GUTSCHRIFTSBELEG" else description)
+def _pending_card(raw_name: str) -> tuple[str, str]:
+    """A pending card payment's merchant and town."""
+    padded = _PADDED.match(raw_name.strip())
+    if padded and len(padded["merchant"]) <= CARD_NAME_WIDTH:
+        return _squash(padded["merchant"]), _squash(padded["town"])
+    return _squash(raw_name[:CARD_NAME_WIDTH]), _squash(raw_name[CARD_NAME_WIDTH:])
 
 
-def _card_pending(name: str, purpose: str) -> Cleaned | None:
-    if not _CARD_PENDING.search(purpose):
-        return None
-    merchant = _squash(name[:CARD_NAME_WIDTH]) or None
-    return Cleaned(merchant, _joined(merchant, _squash(name[CARD_NAME_WIDTH:])))
-
-
-def _girocard(name: str, purpose: str) -> Cleaned | None:
-    match = _GIROCARD.match(purpose)
-    if not match:
-        return None
-    parts = [_squash(p) for p in match["text"].split("/")]
-    town = parts[-2] if len(parts) >= 3 else None
-    payee = _payee(name)
-    return Cleaned(payee, _joined(payee or parts[0], town))
-
-
-def _round_up(name: str, purpose: str) -> Cleaned | None:
-    match = _ROUND_UP.search(purpose)
-    return Cleaned(_payee(name), f"Aufrundung: {_squash(match['merchant'])}") if match else None
-
-
-def _fee(name: str, purpose: str) -> Cleaned | None:
-    if _FOREIGN_FEE.search(purpose):
-        return Cleaned(_payee(name), "Auslandseinsatzentgelt Visa")
-    if _GIROCARD_FEE.search(purpose):
-        return Cleaned(_payee(name), "Monatliches Entgelt Girocard")
-    return None
-
-
-def _returned_debit(name: str, purpose: str) -> Cleaned | None:
-    if "Vorgelegt am" not in purpose:
-        return None
-    text = _RETURN_PARTS.sub(lambda m: ", " + m[1][0].lower() + m[1][1:] if m[1] != "Vorgelegt am" else ", vorgelegt am", purpose)
-    return Cleaned(_payee(name), _squash(text).rstrip("."))
-
-
-def _security(name: str, purpose: str) -> Cleaned | None:
+def _without_name(purpose: str, posting_text: str) -> str:
+    """Words for an entry ING lists without a counterparty."""
     if match := _SECURITY_TRADE.search(purpose):
-        return Cleaned(_payee(name), f"{match['kind']} {_squash(match['name'])} ({match['isin']})")
+        return f"{match['kind']} {_squash(match['name'])} ({match['isin']})"
     if match := _PAYOUT.search(purpose):
-        return Cleaned(_payee(name), f"Ausschüttung {_squash(match['name'])} ({match['isin']})")
-    return None
-
-
-_RULES: tuple[Callable[[str, str], Cleaned | None], ...] = (
-    _security,
-    _fee,
-    _card_booked,
-    _card_pending,
-    _girocard,
-    _round_up,
-    _returned_debit,
-)
+        return f"Ausschüttung {_squash(match['name'])} ({match['isin']})"
+    return posting_text or FALLBACK
 
 
 def clean(raw: dict) -> Cleaned:
-    """Payee and description for one MT940 entry (`raw` is python-fints' transaction data)."""
-    name = str(raw.get("applicant_name") or "")
+    """Payee, description and notes for one MT940 entry (`raw` is python-fints' transaction data)."""
+    raw_name = str(raw.get("applicant_name") or "")
     purpose = _squash(raw.get("purpose"))
-    for rule in _RULES:
-        if cleaned := rule(name, purpose):
-            return Cleaned(cleaned.payee, cleaned.description[:DESCRIPTION_MAX] or FALLBACK)
-    description = _squash(_NOISE.sub(" ", purpose)) or _squash(raw.get("posting_text")) or FALLBACK
-    return Cleaned(_payee(name), description[:DESCRIPTION_MAX])
+    notes = purpose[:NOTES_MAX] or None
+    if _CARD_PENDING.search(purpose):
+        merchant, town = _pending_card(raw_name)
+        description = " · ".join(part for part in (merchant, town) if part)
+        return Cleaned(merchant[:PAYEE_MAX] or None, description[:DESCRIPTION_MAX] or FALLBACK, notes)
+    name = _name(raw_name)
+    if not name:
+        return Cleaned(None, _without_name(purpose, _squash(raw.get("posting_text")))[:DESCRIPTION_MAX], notes)
+    return Cleaned(_payee(name)[:PAYEE_MAX], name[:DESCRIPTION_MAX], notes)
