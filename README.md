@@ -36,11 +36,11 @@ Every program that uses FinTS must be registered with the Deutsche Kreditwirtsch
 
 ### Settings
 
-| Setting | Default | |
-|---|---|---|
-| IBANs to sync | all | Complete IBANs, comma-separated. An IBAN ING doesn't list fails the sync. |
-| Days of history | 85 | 1 to 89. FinTS reaches back about 90 days; later syncs start where Securo asks. |
-| Read depot positions | yes | `no` leaves the holdings Securo has untouched. |
+| Setting              | Default |                                                                                 |
+| -------------------- | ------- | ------------------------------------------------------------------------------- |
+| IBANs to sync        | all     | Complete IBANs, comma-separated. An IBAN ING doesn't list fails the sync.       |
+| Days of history      | 85      | 1 to 89. FinTS reaches back about 90 days; later syncs start where Securo asks. |
+| Read depot positions | yes     | `no` leaves the holdings Securo has untouched.                                  |
 
 ## Pending entries
 
