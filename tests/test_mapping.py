@@ -82,7 +82,14 @@ def test_amounts_are_strings_and_signed_by_type():
 
 def test_rows_carry_the_cleaned_text():
     row = transaction_rows([entry()], [], SALT, "acc", TODAY)[0]
-    assert (row["payee"], row["description"]) == ("BAECKEREI MUSTERMANN", "BAECKEREI MUSTERMANN · Musterstadt")
+    assert (row["payee"], row["description"]) == ("BAECKEREI MUSTERMANN", "BAECKEREI MUSTERMANN")
+    assert row["notes"].startswith("NR XXXX 1234 MUSTERSTADT")
+
+
+def test_without_notes_the_purpose_follows_the_description():
+    row = transaction_rows([entry()], [], SALT, "acc", TODAY, notes=False)[0]
+    assert "notes" not in row
+    assert row["description"].startswith("BAECKEREI MUSTERMANN · NR XXXX 1234 MUSTERSTADT")
 
 
 def test_row_without_payee_leaves_the_field_out():

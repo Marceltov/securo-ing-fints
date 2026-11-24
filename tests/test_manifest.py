@@ -33,8 +33,8 @@ def test_manifest_declares_the_plugin():
     assert [n["host"] for n in MANIFEST["network"]] == ["fints.ing.de"]
     assert INTEGRATION["key"] == "ing"
     assert INTEGRATION["auth"] == "credentials"
-    assert [f["key"] for f in INTEGRATION["fields"]] == ["login", "pin", "product_id", "account_ibans", "history_days", "holdings"]
-    assert [f.get("secret", False) for f in INTEGRATION["fields"]] == [True, True, True, True, False, False]
+    assert [f["key"] for f in INTEGRATION["fields"]] == ["login", "pin", "product_id", "account_ibans", "history_days", "holdings", "notes"]
+    assert [f.get("secret", False) for f in INTEGRATION["fields"]] == [True, True, True, True, False, False, False]
     assert INTEGRATION["provides"] == ["accounts", "transactions", "holdings"]
     assert INTEGRATION["sync_minutes"] == 360
 

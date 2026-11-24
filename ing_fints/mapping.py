@@ -14,7 +14,7 @@ from collections import Counter
 from decimal import Decimal
 from typing import Literal
 
-from ing_fints.text import clean
+from ing_fints.text import DESCRIPTION_MAX, clean
 
 AccountKind = Literal["checking", "savings", "investment"]
 
@@ -59,7 +59,7 @@ def _fingerprint(account_id: str, data: dict, fields: tuple[str, ...]) -> tuple[
     return (account_id, *(str(data.get(field) or "") for field in fields))
 
 
-def _rows(entries: list[dict], salt: str, account_id: str, today: dt.date, *, pending: bool) -> list[dict]:
+def _rows(entries: list[dict], salt: str, account_id: str, today: dt.date, *, pending: bool, notes: bool) -> list[dict]:
     fields, prefix, status = (PENDING_ID_FIELDS, "pend-", "pending") if pending else (BOOKED_ID_FIELDS, "tx-", "posted")
     keyed = sorted(((_fingerprint(account_id, data, fields), data) for data in entries), key=lambda pair: pair[0])
     seen: Counter[tuple[str, ...]] = Counter()
@@ -81,13 +81,19 @@ def _rows(entries: list[dict], salt: str, account_id: str, today: dt.date, *, pe
         }
         if cleaned.payee:
             row["payee"] = cleaned.payee
+        if cleaned.notes and notes:
+            row["notes"] = cleaned.notes
+        elif cleaned.notes:
+            # A Securo that takes no notes from plugins: the purpose stays searchable in the description.
+            row["description"] = f"{cleaned.description} · {cleaned.notes}"[:DESCRIPTION_MAX]
         rows.append(row)
     return rows
 
 
-def transaction_rows(booked: list[dict], pending: list[dict], salt: str, account_id: str, today: dt.date) -> list[dict]:
-    """Booked entries, then pending ones; `account_id` is the account's external ID."""
-    return _rows(booked, salt, account_id, today, pending=False) + _rows(pending, salt, account_id, today, pending=True)
+def transaction_rows(booked: list[dict], pending: list[dict], salt: str, account_id: str, today: dt.date, *, notes: bool = True) -> list[dict]:
+    """Booked entries, then pending ones; `account_id` is the account's external ID. Without `notes` (a Securo that
+    takes none from plugins) the purpose text follows the description."""
+    return _rows(booked, salt, account_id, today, pending=False, notes=notes) + _rows(pending, salt, account_id, today, pending=True, notes=notes)
 
 
 def account_row(iban: str, product_name: str, currency: str, balance: Decimal, salt: str, transactions: list[dict] | None) -> dict:

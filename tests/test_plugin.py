@@ -213,3 +213,21 @@ def test_a_booked_card_payment_keeps_its_pending_id_across_syncs():
     giro = accounts_by_name(second)["Girokonto …9890"]
     assert [(t["external_id"] == pending_id, t["status"]) for t in giro["transactions"] if t["amount"] == "20.00"] == [(True, "posted")]
     assert giro["balance"] == "94.50"  # the fake keeps its booked 100.00; only -5.50 is still pending
+
+
+def test_notes_are_off_unless_switched_on():
+    giro = accounts_by_name(sync())["Girokonto …9890"]
+    assert all("notes" not in t for t in giro["transactions"])
+    assert giro["transactions"][0]["description"] == "Erika Mustermann · Miete"
+
+
+@pytest.mark.parametrize("value", ["yes", "ja"])
+def test_notes_switched_on(value):
+    giro = accounts_by_name(sync(ctx=context({"notes": value})))["Girokonto …9890"]
+    assert {t["notes"] for t in giro["transactions"]} == {"Miete"}
+    assert giro["transactions"][0]["description"] == "Erika Mustermann"
+
+
+def test_bad_notes_value_fails():
+    with pytest.raises(BankSyncError):
+        sync(ctx=context({"notes": "maybe"}))
